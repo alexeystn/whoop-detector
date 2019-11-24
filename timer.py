@@ -61,6 +61,8 @@ class Beeper(pyaudio.PyAudio):
 
 class Capturer(cv2.VideoCapture):
 
+    write_enabled = False
+
     def __init__(self, camera_id=0, write_to_file=False):
         cv2.VideoCapture.__init__(self, camera_id)
         self.set(cv2.CAP_PROP_FPS, 25)
@@ -154,8 +156,10 @@ class Detector:
 
 timer = Timer()
 beeper = Beeper('beep.wav')
-capturer = Capturer(camera_id=1, write_to_file=True)
+capturer = Capturer(camera_id=1, write_to_file=False)
 detector = Detector()
+
+beeper.beep()
 
 while True:
 
