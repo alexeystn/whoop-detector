@@ -134,7 +134,14 @@ class Detector:
         result = n_detected_points > threshold_points_number
         
         img_output = self.img_color_last.copy()
-        img_output[mask] = (0, 255, 0)
+        #img_output[mask] = (0, 255, 0)
+
+        if (n_detected_points):
+            x_edges, y_edges = np.where(mask)
+            p0 = (np.min(y_edges), np.min(x_edges))
+            p1 = (np.max(y_edges), np.max(x_edges))
+            if p1[0]-p0[0] < 200 and p1[1]-p0[1] < 200:
+                cv2.rectangle(img_output, p0, p1, color=(0,255,0), thickness=2)
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         cv2.putText(img_output, str(n_detected_points), (10,20), font, 0.5, [255,255,255], 2, cv2.LINE_AA)
