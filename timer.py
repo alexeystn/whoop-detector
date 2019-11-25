@@ -101,6 +101,7 @@ class Detector:
 
     resolution = (360, 270)
     buffer_length = 5
+    paused = False
     
     def __init__(self):
         self.pointer = 0
@@ -136,12 +137,12 @@ class Detector:
         img_output = self.img_color_last.copy()
         #img_output[mask] = (0, 255, 0)
 
-        if (n_detected_points):
+        if (result):
             x_edges, y_edges = np.where(mask)
-            p0 = (np.min(y_edges), np.min(x_edges))
-            p1 = (np.max(y_edges), np.max(x_edges))
-            if p1[0]-p0[0] < 200 and p1[1]-p0[1] < 200:
-                cv2.rectangle(img_output, p0, p1, color=(0,255,0), thickness=2)
+            p0 = (np.min(y_edges)-5, np.min(x_edges)-5)
+            p1 = (np.max(y_edges)+5, np.max(x_edges)+5)
+            #if p1[0]-p0[0] < 200 and p1[1]-p0[1] < 200:
+            cv2.rectangle(img_output, p0, p1, color=(0,255,0), thickness=2)
 
         font = cv2.FONT_HERSHEY_SIMPLEX
         cv2.putText(img_output, str(n_detected_points), (10,20), font, 0.5, [255,255,255], 2, cv2.LINE_AA)
@@ -157,37 +158,46 @@ class Detector:
         y = img_output.shape[0] - plot_scale
         cv2.line(img_output, (0,y), (img_output.shape[1],y), (0,0,255), 1)
 
+        if self.paused:
+            result = False
+            cv2.rectangle(img_output, (50,50), (60,60), color=(0,300,0), thickness=-1)
+
+
         return (result, img_output)
 
 
+if __name__ == '__main__':
 
-timer = Timer()
-beeper = Beeper('beep.wav')
-capturer = Capturer(camera_id=1, write_to_file=False)
-detector = Detector()
+    timer = Timer()
+    beeper = Beeper('beep.wav')
+    capturer = Capturer(camera_id=1, write_to_file=False)
+    detector = Detector()
 
-beeper.beep()
+    beeper.beep()
 
-while True:
+    while True:
 
-    img = capturer.get_frame()
-    detector.put_image(img)
-    detection_result, img_output = detector.estimate_movement()
+        img = capturer.get_frame()
+        detector.put_image(img)
+        detection_result, img_output = detector.estimate_movement()
 
-    if detection_result:
-        timer_result, lap_time = timer.put_event()
-        if timer_result:
-            beeper.beep()
-            if lap_time:
-                print('{0:7.3f} \n'.format(lap_time))
-            else:
-                print(' Start \n')   
+        if detection_result:
+            timer_result, lap_time = timer.put_event()
+            if timer_result:
+                beeper.beep()
+                if lap_time:
+                    print('{0:7.3f} \n'.format(lap_time))
+                else:
+                    print(' Start \n')   
 
-    cv2.imshow('Whoop Detector', img_output)
-    key = cv2.waitKey(1)
-    if key == 27:
-        break
+        cv2.imshow('Whoop Detector', img_output)
+        key = cv2.waitKey(1)
+        if key == 27:
+            break
+        elif key == 32:
+            detector.paused = not detector.paused
+            
 
-beeper.close()
-capturer.close()
+    beeper.close()
+    capturer.close()
 
