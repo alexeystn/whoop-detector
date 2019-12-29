@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 import time
 import pyaudio
-import wave
 import os
 
 
@@ -20,41 +19,54 @@ class Timer:
         current_timestamp = time.time()
         lap_time = current_timestamp - self.previous_timestamp
         if lap_time < self.min_time:
-            return (False, 0)
+            return False, 0
         if (lap_time > self.max_time) or (not self.started):
             lap_time = None
             self.started = True
         self.previous_timestamp = current_timestamp
-        return (True, lap_time)
+        return True, lap_time
     
 
 class Beeper(pyaudio.PyAudio):
   
     wave_file = None
+    wave_file_pointer = 0
     stream = None
 
     def callback(self, in_data, frame_count, time_info, flag):
-        audio_data = self.wave_file.readframes(frame_count)
-        return (audio_data, pyaudio.paContinue)
+        wave_file_pointer = self.wave_file_pointer
+        audio_data = self.wave_file[np.clip(wave_file_pointer, 0, len(self.wave_file))*2:
+                                    np.clip(wave_file_pointer+frame_count, 0, len(self.wave_file))*2]
+        self.wave_file_pointer += frame_count
+        return audio_data, pyaudio.paContinue
     
     def __init__(self, filename):
         pyaudio.PyAudio.__init__(self)
-        w = wave.open(filename)
-        self.stream = self.open(format=self.get_format_from_width(w.getsampwidth()),
-                             channels=w.getnchannels(),
-                             rate=w.getframerate(),
-                             output=True,
-                             stream_callback=self.callback)
+        fs = 44100
+        t = np.arange(0, 0.5, 1/fs)
+        # fade_len = int(0.005 * fs)
+        fade_len = 100
+        fw = 1500 * 2 * np.pi
+        envelope = np.ones(len(t))
+        envelope[:fade_len] = np.linspace(0, 1, fade_len)
+        envelope[-fade_len:] = np.linspace(1, 0, fade_len)
+        w = (np.round((np.sin(fw*t) + np.sin(fw*t*3)/3) * 1e4, 0) * envelope)
+        w = w.astype('int16')
+        self.stream = self.open(
+            format=self.get_format_from_width(2),
+            channels=1,
+            rate=fs,
+            output=True,
+            stream_callback=self.callback)
         self.stream.stop_stream()
-        self.wave_file = w
+        self.wave_file = w.tobytes()
 
     def beep(self):
         self.stream.stop_stream()
-        self.wave_file.rewind()
+        self.wave_file_pointer = 0
         self.stream.start_stream()  
 
     def close(self):
-        self.wave_file.close()
         self.stream.close()
         self.terminate
         
@@ -67,6 +79,7 @@ class Capturer(cv2.VideoCapture):
         cv2.VideoCapture.__init__(self, camera_id)
         self.set(cv2.CAP_PROP_FPS, 25)
         ret, img = self.read()
+        time.sleep(0.5)
         ret, img = self.read()
         if not ret:
             print('Cannot capture video from camera')
@@ -162,8 +175,7 @@ class Detector:
             result = False
             cv2.rectangle(img_output, (50,50), (60,60), color=(0,300,0), thickness=-1)
 
-
-        return (result, img_output)
+        return result, img_output
 
 
 if __name__ == '__main__':
@@ -173,6 +185,7 @@ if __name__ == '__main__':
     capturer = Capturer(camera_id=1, write_to_file=False)
     detector = Detector()
 
+    cv2.namedWindow('Whoop Detector', cv2.WINDOW_NORMAL)
     beeper.beep()
 
     while True:
@@ -196,7 +209,6 @@ if __name__ == '__main__':
             break
         elif key == 32:
             detector.paused = not detector.paused
-            
 
     beeper.close()
     capturer.close()
