@@ -129,11 +129,24 @@ class Detector:
             self.pointer = 0
         img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         img_gray = cv2.resize(img_gray, self.resolution)
-        img_gray = cv2.blur(img_gray, (10, 10))
+        img_gray = cv2.blur(img_gray, (20, 20))
         if not self.buffer.any(): 
             self.buffer[:] = img_gray
         self.buffer[self.pointer,:,:] = img_gray
         self.img_color_last = cv2.resize(img, self.resolution)
+
+    def display_experiental_detection(self, img_new, img_bg):
+        frame_delta = cv2.absdiff(img_new, img_bg)
+        thresh = cv2.threshold(frame_delta, 25, 255, cv2.THRESH_BINARY)[1]
+        thresh_dilated = cv2.dilate(thresh, None, iterations=2)
+        cnts, hier = cv2.findContours(thresh_dilated.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        frame = cv2.cvtColor(img_new, cv2.COLOR_GRAY2BGR)
+        cv2.drawContours(frame, cnts, -1, (0, 255, 0), 3)
+        #if cnts[1]:
+        #    for c in cnts[1]:
+        #        (x, y, w, h) = cv2.boundingRect(c)
+        #        cv2.rectangle(frame, (x, y), (x + w, y +h), (0,255,0), 2)
+        cv2.imshow('Experimental', frame)
 
     def estimate_movement(self):
         plot_scale = 30
@@ -141,6 +154,8 @@ class Detector:
         threshold_points_number = 1000
         
         img_smoothed = np.mean(self.buffer, axis=0).astype('uint8')
+        # cv2.GaussianBlur(img, (21, 21), 0)
+        self.display_experiental_detection(self.buffer[self.pointer,:,:], img_smoothed)
         img_diff = self.buffer[self.pointer,:,:].astype('float') - img_smoothed.astype('float')
         img_diff = np.abs(img_diff)
         mask = img_diff >= threshold_difference_level
