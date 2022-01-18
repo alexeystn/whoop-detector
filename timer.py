@@ -50,9 +50,9 @@ class Capturer(cv2.VideoCapture):
                 filename = 'video/{0:04d}.mp4'.format(num)
                 if not os.path.exists(filename):
                     print('Writing to file <{0}>\n'.format(filename))
+                    self.writer = cv2.VideoWriter(filename, fourcc, 25, res)
+                    self.write_enabled = True
                     break
-            self.writer = cv2.VideoWriter(filename, fourcc, 25, res)
-            self.write_enabled = True
 
     def get_frame(self):
         ret, img = self.read()
