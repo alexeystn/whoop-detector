@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import time
-import pyaudio
+import playsound
 import os
 
 
@@ -181,8 +181,8 @@ class Detector:
         self.history[-1] = point_y
   
         y = self.resolution[1] - np.floor(self.history * plot_scale) - 1
-        for i in range(len(self.history)-1):
-            cv2.line(img_output, (i,y[i]), (i+1,y[i+1]), (0,255,255), 1)
+        #for i in range(len(self.history)-1):
+            #cv2.line(img_output, (i,y[i]), (i+1,y[i+1]), (0,255,255), 1)
         y = img_output.shape[0] - plot_scale
         cv2.line(img_output, (0,y), (img_output.shape[1],y), (0,0,255), 1)
 
@@ -196,12 +196,11 @@ class Detector:
 if __name__ == '__main__':
 
     timer = Timer()
-    beeper = Beeper('beep.wav')
-    capturer = Capturer(camera_id=1, write_to_file=False)
+    capturer = Capturer(camera_id=0, write_to_file=False)
     detector = Detector()
 
     cv2.namedWindow('Whoop Detector', cv2.WINDOW_NORMAL)
-    beeper.beep()
+    beep()
 
     while True:
 
@@ -212,7 +211,7 @@ if __name__ == '__main__':
         if detection_result:
             timer_result, lap_time = timer.put_event()
             if timer_result:
-                beeper.beep()
+                beep()
                 if lap_time:
                     print('{0:7.3f} \n'.format(lap_time))
                 else:
@@ -225,6 +224,5 @@ if __name__ == '__main__':
         elif key == 32:
             detector.paused = not detector.paused
 
-    beeper.close()
     capturer.close()
 
