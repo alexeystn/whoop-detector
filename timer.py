@@ -80,7 +80,7 @@ class Detector:
     
     def __init__(self, config):
         self.resolution = (int(config['SCREEN']['Width']), int(config['SCREEN']['Height']))
-        self.sensitivity = config['DETECTION']['Sensitivity']
+        self.sensitivity = int(config['DETECTION']['Sensitivity'])
         self.pointer = 0
         self.buffer = np.zeros((self.buffer_length, self.resolution[1],
                                 self.resolution[0]), dtype='uint8')
@@ -109,8 +109,10 @@ class Detector:
 
     def estimate_movement(self):
 
+        def apply_log_scale(values, sensitivity):
+            return np.log(values * np.exp((sensitivity - 5)/3) * (np.e - 1) + 1)
+
         threshold_difference_level = 7  # pixel brightness 0..255
-        threshold_points_part = (np.exp(0.5) - 1) / ( np.e - 1)
 
         img_smoothed = np.mean(self.buffer, axis=0).astype('uint8')
         img_diff = self.buffer[self.pointer, :, :].astype('float') - img_smoothed.astype('float')
@@ -120,7 +122,10 @@ class Detector:
         detected_points_part = n_detected_points / np.prod(self.resolution)
         # print('{0:.3f}'.format(detected_points_part))
 
-        result = detected_points_part > threshold_points_part
+        self.history[:-1] = self.history[1:]
+        self.history[-1] = detected_points_part
+
+        result = apply_log_scale(detected_points_part, self.sensitivity) > 0.5
         
         img_output_video = self.img_color_last.copy()
 
@@ -136,12 +141,8 @@ class Detector:
 
         img_output_plot = np.zeros((self.resolution[1]//3, self.resolution[0], 3), dtype='uint8')
 
-        y_float = np.log(detected_points_part * (np.e - 1) + 1)
-        y_int = y_float * self.resolution[1]//3
-        self.history[:-1] = self.history[1:]
-        self.history[-1] = y_int
+        y = (1 - apply_log_scale(self.history, self.sensitivity)) * self.resolution[1]//3
 
-        y = self.resolution[1]//3 - self.history
         for i in range(len(self.history)-1):
             cv2.line(img_output_plot, (i, int(y[i])), (i+1, int(y[i+1])), (0, 255, 255), 1)
         y = img_output_plot.shape[0]//2
@@ -171,7 +172,7 @@ def main():
 
         img = capturer.get_frame()
         detector.put_image(img)
-        detection_result, img_output = detector.estimate_movement()
+        detection_result, img_output = detector.estimate_movement
 
         if detection_result:
             timer_result, lap_time = timer.put_event()
