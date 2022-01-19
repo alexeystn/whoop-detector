@@ -80,10 +80,20 @@ class Detector:
     
     def __init__(self, config):
         self.resolution = (int(config['SCREEN']['Width']), int(config['SCREEN']['Height']))
+        self.sensitivity = config['DETECTION']['Sensitivity']
         self.pointer = 0
         self.buffer = np.zeros((self.buffer_length, self.resolution[1],
                                 self.resolution[0]), dtype='uint8')
         self.history = np.zeros((self.resolution[0], 1))
+
+    def decrease_sensitivity(self):
+        if self.sensitivity > 1:
+            self.sensitivity -= 1
+
+    def increase_sensitivity(self):
+        if self.sensitivity < 10:
+            self.sensitivity += 1
+        # TODO: save sensitivity to config
 
     def put_image(self, img):
         self.pointer += 1
@@ -98,43 +108,50 @@ class Detector:
         self.img_color_last = cv2.resize(img, self.resolution)
 
     def estimate_movement(self):
-        plot_scale = 30
-        threshold_difference_level = 7
-        threshold_points_number = 1000  # for (360, 240)
+
+        threshold_difference_level = 7  # pixel brightness 0..255
+        threshold_points_part = (np.exp(0.5) - 1) / ( np.e - 1)
 
         img_smoothed = np.mean(self.buffer, axis=0).astype('uint8')
         img_diff = self.buffer[self.pointer, :, :].astype('float') - img_smoothed.astype('float')
         img_diff = np.abs(img_diff)
         mask = img_diff >= threshold_difference_level
         n_detected_points = np.count_nonzero(mask)
-        result = n_detected_points > threshold_points_number
+        detected_points_part = n_detected_points / np.prod(self.resolution)
+        # print('{0:.3f}'.format(detected_points_part))
+
+        result = detected_points_part > threshold_points_part
         
-        img_output = self.img_color_last.copy()
+        img_output_video = self.img_color_last.copy()
 
         if result:
             x_edges, y_edges = np.where(mask)
             p0 = (np.min(y_edges)-5, np.min(x_edges)-5)
             p1 = (np.max(y_edges)+5, np.max(x_edges)+5)
-            # if p1[0]-p0[0] < 200 and p1[1]-p0[1] < 200:
-            cv2.rectangle(img_output, p0, p1, color=(0, 255, 0), thickness=2)
+            cv2.rectangle(img_output_video, p0, p1, color=(0, 255, 0), thickness=2)
 
         font = cv2.FONT_HERSHEY_SIMPLEX
-        cv2.putText(img_output, str(n_detected_points), (10, 20), font, 0.5, [255, 255, 255], 2, cv2.LINE_AA)
-        cv2.putText(img_output, str(n_detected_points), (10, 20), font, 0.5, [0, 0, 0], 1, cv2.LINE_AA)
+        cv2.putText(img_output_video, str(n_detected_points), (10, 20), font, 0.5, [255, 255, 255], 2, cv2.LINE_AA)
+        cv2.putText(img_output_video, str(n_detected_points), (10, 20), font, 0.5, [0, 0, 0], 1, cv2.LINE_AA)
 
-        point_y = np.log((n_detected_points / threshold_points_number) * (np.e - 1) + 1)
+        img_output_plot = np.zeros((self.resolution[1]//3, self.resolution[0], 3), dtype='uint8')
+
+        y_float = np.log(detected_points_part * (np.e - 1) + 1)
+        y_int = y_float * self.resolution[1]//3
         self.history[:-1] = self.history[1:]
-        self.history[-1] = point_y
-  
-        y = self.resolution[1] - np.floor(self.history * plot_scale) - 1
+        self.history[-1] = y_int
+
+        y = self.resolution[1]//3 - self.history
         for i in range(len(self.history)-1):
-            cv2.line(img_output, (i, int(y[i])), (i+1, int(y[i+1])), (0, 255, 255), 1)
-        y = img_output.shape[0] - plot_scale
-        cv2.line(img_output, (0, y), (img_output.shape[1], y), (0, 0, 255), 1)
+            cv2.line(img_output_plot, (i, int(y[i])), (i+1, int(y[i+1])), (0, 255, 255), 1)
+        y = img_output_plot.shape[0]//2
+        cv2.line(img_output_plot, (0, y), (img_output_plot.shape[1], y), (0, 0, 255), 1)
 
         if self.paused:
             result = False
-            cv2.rectangle(img_output, (50, 50), (60, 60), color=(0, 300, 0), thickness=-1)
+            cv2.rectangle(img_output_video, (50, 50), (60, 60), color=(0, 300, 0), thickness=-1)
+
+        img_output = np.vstack((img_output_video, img_output_plot))
 
         return result, img_output
 
@@ -171,6 +188,10 @@ def main():
             break
         elif key == 32:
             detector.paused = not detector.paused
+        elif key == 45:
+            detector.decrease_sensitivity()
+        elif key == 61:
+            detector.increase_sensitivity()
 
     capturer.close()
 
