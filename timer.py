@@ -4,15 +4,15 @@ import time
 import playsound
 import os
 import sys
+import configparser
 
 
 class Timer:
 
-    min_time = 5
-    max_time = 60
-    started = False
-    
-    def __init__(self):
+    def __init__(self, config):
+        self.min_time = int(config['RACE']['MinLapTime'])
+        self.max_time = int(config['RACE']['MaxLapTime'])
+
         self.started = False
         self.previous_timestamp = time.time()
 
@@ -32,8 +32,8 @@ class Capturer(cv2.VideoCapture):
 
     write_enabled = False
 
-    def __init__(self, camera_id=0, write_to_file=False):
-        cv2.VideoCapture.__init__(self, camera_id)
+    def __init__(self, config, write_to_file=False):
+        cv2.VideoCapture.__init__(self, int(config['DETECTION']['CameraID']))
         self.set(cv2.CAP_PROP_FPS, 25)
         self.read()
         time.sleep(0.5)
@@ -74,12 +74,12 @@ def beep():
 
 class Detector:
 
-    resolution = (360, 270)
     buffer_length = 5
     paused = False
     img_color_last = None
     
-    def __init__(self):
+    def __init__(self, config):
+        self.resolution = (int(config['SCREEN']['Width']), int(config['SCREEN']['Height']))
         self.pointer = 0
         self.buffer = np.zeros((self.buffer_length, self.resolution[1],
                                 self.resolution[0]), dtype='uint8')
@@ -100,7 +100,7 @@ class Detector:
     def estimate_movement(self):
         plot_scale = 30
         threshold_difference_level = 7
-        threshold_points_number = 1000
+        threshold_points_number = 1000  # for (360, 240)
 
         img_smoothed = np.mean(self.buffer, axis=0).astype('uint8')
         img_diff = self.buffer[self.pointer, :, :].astype('float') - img_smoothed.astype('float')
@@ -140,9 +140,12 @@ class Detector:
 
 
 def main():
-    timer = Timer()
-    capturer = Capturer(camera_id=0, write_to_file=False)
-    detector = Detector()
+
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+    timer = Timer(config)
+    capturer = Capturer(config)
+    detector = Detector(config)
 
     cv2.namedWindow('Whoop Detector', cv2.WINDOW_NORMAL)
     beep()
