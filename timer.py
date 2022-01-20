@@ -10,8 +10,8 @@ import configparser
 class Timer:
 
     def __init__(self, config):
-        self.min_time = int(config['RACE']['MinLapTime'])
-        self.max_time = int(config['RACE']['MaxLapTime'])
+        self.min_time = int(config['RACE']['min_lap_time'])
+        self.max_time = int(config['RACE']['max_lap_time'])
 
         self.started = False
         self.previous_timestamp = time.time()
@@ -33,7 +33,7 @@ class Capturer(cv2.VideoCapture):
     write_enabled = False
 
     def __init__(self, config, write_to_file=False):
-        cv2.VideoCapture.__init__(self, int(config['DETECTION']['CameraID']))
+        cv2.VideoCapture.__init__(self, int(config['DETECTION']['camera_id']))
         self.set(cv2.CAP_PROP_FPS, 25)
         self.read()
         time.sleep(0.5)
@@ -79,21 +79,32 @@ class Detector:
     img_color_last = None
     
     def __init__(self, config):
-        self.resolution = (int(config['SCREEN']['Width']), int(config['SCREEN']['Height']))
-        self.sensitivity = int(config['DETECTION']['Sensitivity'])
+        self.resolution = (int(config['SCREEN']['width']), int(config['SCREEN']['height']))
+        self.sensitivity = int(config['DETECTION']['sensitivity'])
         self.pointer = 0
         self.buffer = np.zeros((self.buffer_length, self.resolution[1],
                                 self.resolution[0]), dtype='uint8')
         self.history = np.zeros((self.resolution[0], 1))
+        self.time_to_save = 0
 
     def decrease_sensitivity(self):
         if self.sensitivity > 1:
             self.sensitivity -= 1
+            self.time_to_save = time.time() + 3
 
     def increase_sensitivity(self):
         if self.sensitivity < 10:
             self.sensitivity += 1
-        # TODO: save sensitivity to config
+            self.time_to_save = time.time() + 3
+
+    def check_config_status(self, config):
+        if self.time_to_save:
+            if self.time_to_save < time.time():
+                self.time_to_save = 0
+                config['DETECTION']['sensitivity'] = str(self.sensitivity)
+                with open('config.ini', 'w') as configfile:
+                    config.write(configfile)
+                    print('Config saved')
 
     def put_image(self, img):
         self.pointer += 1
@@ -172,7 +183,7 @@ def main():
 
         img = capturer.get_frame()
         detector.put_image(img)
-        detection_result, img_output = detector.estimate_movement
+        detection_result, img_output = detector.estimate_movement()
 
         if detection_result:
             timer_result, lap_time = timer.put_event()
@@ -193,6 +204,7 @@ def main():
             detector.decrease_sensitivity()
         elif key == 61:
             detector.increase_sensitivity()
+        detector.check_config_status(config)
 
     capturer.close()
 
