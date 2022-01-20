@@ -27,6 +27,9 @@ class Timer:
         self.previous_timestamp = current_timestamp
         return True, lap_time
 
+    def reset(self):
+        self.started = False
+        
 
 class Capturer(cv2.VideoCapture):
 
@@ -88,6 +91,9 @@ class Detector:
         self.time_to_save = 0
         self.frame_counter = 0
         self.prev_detected_points_part = 0
+
+    def toggle_pause(self):
+        self.paused = not self.paused
 
     def decrease_sensitivity(self):
         if self.sensitivity > 1:
@@ -208,7 +214,8 @@ def main():
         if key == 27:
             break
         elif key == 32:
-            detector.paused = not detector.paused
+            detector.toggle_pause()
+            timer.reset()
         elif key == 45:
             detector.decrease_sensitivity()
         elif key == 61:
