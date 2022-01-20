@@ -86,6 +86,8 @@ class Detector:
                                 self.resolution[0]), dtype='uint8')
         self.history = np.zeros((self.resolution[0], 1))
         self.time_to_save = 0
+        self.frame_counter = 0
+        self.prev_detected_points_part = 0
 
     def decrease_sensitivity(self):
         if self.sensitivity > 1:
@@ -133,8 +135,13 @@ class Detector:
         detected_points_part = n_detected_points / np.prod(self.resolution)
         # print('{0:.3f}'.format(detected_points_part))
 
-        self.history[:-1] = self.history[1:]
-        self.history[-1] = detected_points_part
+        self.frame_counter += 1
+
+        if self.frame_counter % 2 == 0:  # slow down the plot twice, keeping peak values
+            new_history_value = np.max([self.prev_detected_points_part, detected_points_part])
+            self.history[:-1] = self.history[1:]
+            self.history[-1] = new_history_value
+        self.prev_detected_points_part = detected_points_part
 
         result = apply_log_scale(detected_points_part, self.sensitivity) > 0.5
         
@@ -152,12 +159,14 @@ class Detector:
 
         img_output_plot = np.zeros((self.resolution[1]//3, self.resolution[0], 3), dtype='uint8')
 
-        y = (1 - apply_log_scale(self.history, self.sensitivity)) * self.resolution[1]//3
+        y = img_output_plot.shape[0] // 2
+        cv2.line(img_output_plot, (0, y), (img_output_plot.shape[1], y), (127, 127, 127), 1)
 
+        y = (1 - apply_log_scale(self.history, self.sensitivity)) * self.resolution[1]//3
+        y[y < 3] = 3
+        y[y > self.resolution[1]//3-4] = self.resolution[1]//3-4
         for i in range(len(self.history)-1):
-            cv2.line(img_output_plot, (i, int(y[i])), (i+1, int(y[i+1])), (0, 255, 255), 1)
-        y = img_output_plot.shape[0]//2
-        cv2.line(img_output_plot, (0, y), (img_output_plot.shape[1], y), (0, 0, 255), 1)
+            cv2.line(img_output_plot, (i, int(y[i])), (i+1, int(y[i+1])), (255, 255, 255), 1, cv2.LINE_AA)
 
         if self.paused:
             result = False
