@@ -120,6 +120,7 @@ class Detector:
         self.time_to_save = 0
         self.frame_counter = 0
         self.prev_detected_points_part = 0
+        self.laps_list = []
 
     def toggle_pause(self):
         self.paused = not self.paused
@@ -155,10 +156,21 @@ class Detector:
         self.buffer[self.pointer, :, :] = img_gray
         self.img_color_last = cv2.resize(img, self.resolution)
 
+    def put_lap(self, lap_time):
+        self.laps_list.append(lap_time)
+
+    def clear_laps(self):
+        self.laps_list = []
+
     def estimate_movement(self):
 
         def apply_log_scale(values, sensitivity):
             return np.log(values * np.exp((sensitivity - 5)/3) * (np.e - 1) + 1)
+
+        def print_text(image, text, pos, size):
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            cv2.putText(image, text, pos, font, size, [255, 255, 255], 3, cv2.LINE_AA)
+            cv2.putText(image, text, pos, font, size, [0, 0, 0], 1, cv2.LINE_AA)
 
         threshold_difference_level = 7  # pixel brightness 0..255
 
@@ -188,10 +200,6 @@ class Detector:
             p1 = (np.max(y_edges)+5, np.max(x_edges)+5)
             cv2.rectangle(img_output_video, p0, p1, color=(0, 255, 0), thickness=2)
 
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        cv2.putText(img_output_video, str(n_detected_points), (10, 20), font, 0.5, [255, 255, 255], 2, cv2.LINE_AA)
-        cv2.putText(img_output_video, str(n_detected_points), (10, 20), font, 0.5, [0, 0, 0], 1, cv2.LINE_AA)
-
         img_output_plot = np.zeros((self.resolution[1]//3, self.resolution[0], 3), dtype='uint8')
 
         y = img_output_plot.shape[0] // 2
@@ -205,7 +213,12 @@ class Detector:
 
         if self.paused:
             result = False
-            cv2.rectangle(img_output_video, (50, 50), (60, 60), color=(0, 300, 0), thickness=-1)
+            print_text(img_output_plot, '[Pause]', (self.resolution[0]//2 - 40, 40), 1)
+        for i, lap in enumerate(self.laps_list):
+            y = i * 20 + 30
+            print_text(img_output_video, '{0:.2f}'.format(lap), (20, y), 0.5)
+            if i > self.resolution[1]//20:
+                break
 
         img_output = np.vstack((img_output_video, img_output_plot))
 
