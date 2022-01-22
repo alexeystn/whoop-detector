@@ -120,7 +120,9 @@ class Detector:
         self.time_to_save = 0
         self.frame_counter = 0
         self.prev_detected_points_part = 0
+        self.line_height = 35
         self.laps_list = []
+        self.max_displayed_lap_count = self.resolution[1]//self.line_height
 
     def toggle_pause(self):
         self.paused = not self.paused
@@ -131,7 +133,7 @@ class Detector:
             self.time_to_save = time.time() + 3
 
     def increase_sensitivity(self):
-        if self.sensitivity < 10:
+        if self.sensitivity < 15:
             self.sensitivity += 1
             self.time_to_save = time.time() + 3
 
@@ -157,20 +159,24 @@ class Detector:
         self.img_color_last = cv2.resize(img, self.resolution)
 
     def put_lap(self, lap_time):
-        self.laps_list.append(lap_time)
+        self.laps_list.append('{0:.2f}'.format(lap_time))
+        if len(self.laps_list) > self.max_displayed_lap_count:
+            self.laps_list.pop(0)
+            self.laps_list[0] = '^'
 
     def clear_laps(self):
         self.laps_list = []
 
-    def estimate_movement(self):
+    def estimate_movement(self, debug):
 
         def apply_log_scale(values, sensitivity):
             return np.log(values * np.exp((sensitivity - 5)/3) * (np.e - 1) + 1)
 
         def print_text(image, text, pos, size):
             font = cv2.FONT_HERSHEY_SIMPLEX
-            cv2.putText(image, text, pos, font, size, [255, 255, 255], 3, cv2.LINE_AA)
-            cv2.putText(image, text, pos, font, size, [0, 0, 0], 1, cv2.LINE_AA)
+            (w, h), baseline = cv2.getTextSize(text, font, size, 2)
+            pos = (pos[0] - w//2, pos[1] + h//2)
+            cv2.putText(image, text, pos, font, size, [255, 255, 255], 2, cv2.LINE_AA)
 
         threshold_difference_level = 7  # pixel brightness 0..255
 
@@ -191,7 +197,7 @@ class Detector:
         self.prev_detected_points_part = detected_points_part
 
         result = apply_log_scale(detected_points_part, self.sensitivity) > 0.5
-        
+
         img_output_video = self.img_color_last.copy()
 
         if result:
@@ -213,13 +219,14 @@ class Detector:
 
         if self.paused:
             result = False
-            print_text(img_output_plot, '[Pause]', (self.resolution[0]//2 - 40, 40), 1)
-        for i, lap in enumerate(self.laps_list):
-            y = i * 20 + 30
-            print_text(img_output_video, '{0:.2f}'.format(lap), (20, y), 0.5)
-            if i > self.resolution[1]//20:
-                break
+            print_text(img_output_plot, 'Pause', (self.resolution[0]//2, self.resolution[1]//3//4), 1)
 
+        height = len(self.laps_list) * self.line_height
+        img_output_video[10:height+10, 10:110, :] //= 2
+
+        for i, lap in enumerate(self.laps_list):
+            y = i * self.line_height + self.line_height // 2 + 10
+            print_text(img_output_video, lap, (60, y), 0.7)
         img_output = np.vstack((img_output_video, img_output_plot))
 
         return result, img_output
@@ -234,7 +241,6 @@ class Debug:
         self.toc_time = 0
         self.counter = 0
         self.enabled = int(config['DEBUG']['debug'])
-        return
 
     def tic(self):
         self.tic_time = time.time()
@@ -251,9 +257,10 @@ class Debug:
         self.previous_cycle_time = current_cycle_time
         load = function_duration / cycle_duration
         self.counter += 1
-        if self.counter > 10:
+        if self.counter == 10:
             self.counter = 0
-            print('DEBUG: {0:.2f}% load, {1:.1f} FPS'.format(load*100,  1/cycle_duration))
+            print('DEBUG:  {0:4.0f} us  {1:5.2f}% load  {2:.1f} FPS'.format(
+                function_duration*1e6, load*100,  1/cycle_duration))
 
 
 def main():
@@ -274,7 +281,7 @@ def main():
         img = capturer.get_frame()
         debug.tic()
         detector.put_image(img)
-        detection_result, img_output = detector.estimate_movement()
+        detection_result, img_output = detector.estimate_movement(debug)
 
         if detection_result:
             timer_result, lap_time = timer.put_event()
@@ -297,6 +304,7 @@ def main():
             timer.reset()
         elif key == 13:  # enter
             detector.clear_laps()
+            timer.reset()
         elif key == 45:  # minus
             detector.decrease_sensitivity()
         elif key == 61:  # plus
