@@ -225,6 +225,37 @@ class Detector:
         return result, img_output
 
 
+class Debug:
+
+    def __init__(self, config):
+        self.previous_cycle_time = time.time()
+        self.load = 0
+        self.tic_time = 0
+        self.toc_time = 0
+        self.counter = 0
+        self.enabled = int(config['DEBUG']['debug'])
+        return
+
+    def tic(self):
+        self.tic_time = time.time()
+
+    def toc(self):
+        self.toc_time = time.time()
+
+    def cycle(self):
+        if not self.enabled:
+            return
+        current_cycle_time = time.time()
+        cycle_duration = current_cycle_time - self.previous_cycle_time
+        function_duration = self.toc_time - self.tic_time
+        self.previous_cycle_time = current_cycle_time
+        load = function_duration / cycle_duration
+        self.counter += 1
+        if self.counter > 10:
+            self.counter = 0
+            print('DEBUG: {0:.2f}% load, {1:.1f} FPS'.format(load*100,  1/cycle_duration))
+
+
 def main():
 
     config = configparser.ConfigParser()
@@ -233,6 +264,7 @@ def main():
     capturer = Capturer(config)
     detector = Detector(config)
     logger = Logger()
+    debug = Debug(config)
 
     cv2.namedWindow('Whoop Detector', cv2.WINDOW_NORMAL)
     beep()
@@ -240,6 +272,7 @@ def main():
     while True:
 
         img = capturer.get_frame()
+        debug.tic()
         detector.put_image(img)
         detection_result, img_output = detector.estimate_movement()
 
@@ -254,6 +287,8 @@ def main():
                     logger.put('Start')
 
         cv2.imshow('Whoop Detector', img_output)
+        debug.toc()
+
         key = cv2.waitKey(1)
         if key == 27:  # esc
             break
@@ -266,7 +301,9 @@ def main():
             detector.decrease_sensitivity()
         elif key == 61:  # plus
             detector.increase_sensitivity()
+
         detector.check_config_status(config)
+        debug.cycle()
 
     capturer.close()
     logger.close()
