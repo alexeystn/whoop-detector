@@ -113,6 +113,7 @@ class Detector:
     def __init__(self, config):
         self.resolution = (int(config['SCREEN']['width']), int(config['SCREEN']['height']))
         self.sensitivity = int(config['DETECTION']['sensitivity'])
+        self.show_plot = int(config['DEBUG']['show_plot'])
         self.pointer = 0
         self.buffer = np.zeros((self.buffer_length, self.resolution[1],
                                 self.resolution[0]), dtype='uint8')
@@ -126,6 +127,14 @@ class Detector:
 
     def toggle_pause(self):
         self.paused = not self.paused
+
+    def toggle_plot(self):
+        self.show_plot = int(not self.show_plot)
+        self.time_to_save = time.time() + 3
+        if self.show_plot:
+            cv2.resizeWindow('Whoop Detector', self.resolution[0], self.resolution[1] + self.resolution[1]//3)
+        else:
+            cv2.resizeWindow('Whoop Detector', self.resolution[0], self.resolution[1])
 
     def decrease_sensitivity(self):
         if self.sensitivity > 1:
@@ -142,6 +151,7 @@ class Detector:
             if self.time_to_save < time.time():
                 self.time_to_save = 0
                 config['DETECTION']['sensitivity'] = str(self.sensitivity)
+                config['DEBUG']['show_plot'] = str(self.show_plot)
                 with open('config.ini', 'w') as configfile:
                     config.write(configfile)
                     print('Config saved')
@@ -186,7 +196,6 @@ class Detector:
         mask = img_diff >= threshold_difference_level
         n_detected_points = np.count_nonzero(mask)
         detected_points_part = n_detected_points / np.prod(self.resolution)
-        # print('{0:.3f}'.format(detected_points_part))
 
         self.frame_counter += 1
 
@@ -206,28 +215,36 @@ class Detector:
             p1 = (np.max(y_edges)+5, np.max(x_edges)+5)
             cv2.rectangle(img_output_video, p0, p1, color=(0, 255, 0), thickness=2)
 
-        img_output_plot = np.zeros((self.resolution[1]//3, self.resolution[0], 3), dtype='uint8')
-
-        y = img_output_plot.shape[0] // 2
-        cv2.line(img_output_plot, (0, y), (img_output_plot.shape[1], y), (127, 127, 127), 1)
-
-        y = (1 - apply_log_scale(self.history, self.sensitivity)) * self.resolution[1]//3
-        y[y < 3] = 3
-        y[y > self.resolution[1]//3-4] = self.resolution[1]//3-4
-        for i in range(len(self.history)-1):
-            cv2.line(img_output_plot, (i, int(y[i])), (i+1, int(y[i+1])), (255, 255, 255), 1, cv2.LINE_AA)
-
-        if self.paused:
-            result = False
-            print_text(img_output_plot, 'Pause', (self.resolution[0]//2, self.resolution[1]//3//4), 1)
-
         height = len(self.laps_list) * self.line_height
         img_output_video[10:height+10, 10:110, :] //= 2
 
         for i, lap in enumerate(self.laps_list):
             y = i * self.line_height + self.line_height // 2 + 10
             print_text(img_output_video, lap, (60, y), 0.7)
-        img_output = np.vstack((img_output_video, img_output_plot))
+
+        if self.paused:
+            result = False
+            (x, y) = (self.resolution[0]//2, self.resolution[1]//2)
+            img_output_video[y-22:y+22, x-70:x+70, :] //= 2
+            print_text(img_output_video, 'Pause', (x, y), 1)
+
+        if self.show_plot:
+
+            img_output_plot = np.zeros((self.resolution[1]//3, self.resolution[0], 3), dtype='uint8')
+
+            y = img_output_plot.shape[0] // 2
+            cv2.line(img_output_plot, (0, y), (img_output_plot.shape[1], y), (127, 127, 127), 1)
+
+            y = (1 - apply_log_scale(self.history, self.sensitivity)) * self.resolution[1]//3
+            y[y < 3] = 3
+            y[y > self.resolution[1]//3-4] = self.resolution[1]//3-4
+            for i in range(len(self.history)-1):
+                cv2.line(img_output_plot, (i, int(y[i])), (i+1, int(y[i+1])), (255, 255, 255), 1, cv2.LINE_AA)
+
+            img_output = np.vstack((img_output_video, img_output_plot))
+
+        else:
+            img_output = img_output_video
 
         return result, img_output
 
@@ -309,6 +326,8 @@ def main():
             detector.decrease_sensitivity()
         elif key == 61:  # plus
             detector.increase_sensitivity()
+        elif key == ord('p'):
+            detector.toggle_plot()
 
         detector.check_config_status(config)
         debug.cycle()
