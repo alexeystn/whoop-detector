@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import time
+import datetime
 import playsound
 import os
 import sys
@@ -21,15 +22,43 @@ class Timer:
         lap_time = current_timestamp - self.previous_timestamp
         if lap_time < self.min_time:
             return False, 0
-        if (lap_time > self.max_time) or (not self.started):
+
+        if not self.started:
             lap_time = None
             self.started = True
+        else:
+            if lap_time > self.max_time:
+                lap_time = None
+
         self.previous_timestamp = current_timestamp
         return True, lap_time
 
     def reset(self):
         self.started = False
-        
+
+
+class Logger:
+    
+    output_path = './logs/'
+    file = None
+
+    def __init__(self):
+        if not os.path.exists(self.output_path):
+            os.mkdir(self.output_path)
+            
+        d = datetime.datetime.now() 
+        filename = self.output_path + d.strftime('%Y%m%d_%H%M%S.txt')
+        self.file = open(filename, 'w')
+
+    def put(self, value):
+        print(value)
+        d = datetime.datetime.now().strftime('%Y.%m.%d %H:%M:%S')
+        self.file.write(d + '\t' + value + '\n')
+        return 0
+
+    def close(self):
+        self.file.close()
+    
 
 class Capturer(cv2.VideoCapture):
 
@@ -190,6 +219,7 @@ def main():
     timer = Timer(config)
     capturer = Capturer(config)
     detector = Detector(config)
+    logger = Logger()
 
     cv2.namedWindow('Whoop Detector', cv2.WINDOW_NORMAL)
     beep()
@@ -205,24 +235,28 @@ def main():
             if timer_result:
                 beep()
                 if lap_time:
-                    print('{0:7.3f}'.format(lap_time))
+                    logger.put('{0:.2f}'.format(lap_time))
+                    detector.put_lap(lap_time)
                 else:
-                    print('Start')
+                    logger.put('Start')
 
         cv2.imshow('Whoop Detector', img_output)
         key = cv2.waitKey(1)
-        if key == 27:
+        if key == 27:  # esc
             break
-        elif key == 32:
+        elif key == 32:  # space
             detector.toggle_pause()
             timer.reset()
-        elif key == 45:
+        elif key == 13:  # enter
+            detector.clear_laps()
+        elif key == 45:  # minus
             detector.decrease_sensitivity()
-        elif key == 61:
+        elif key == 61:  # plus
             detector.increase_sensitivity()
         detector.check_config_status(config)
 
     capturer.close()
+    logger.close()
 
 
 if __name__ == '__main__':
