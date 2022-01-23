@@ -1,11 +1,12 @@
-import cv2
-import numpy as np
-import time
-import datetime
-import playsound
 import os
 import sys
+import time
+import datetime
 import configparser
+
+import cv2
+import numpy as np
+import playsound
 
 
 class Timer:
@@ -38,15 +39,15 @@ class Timer:
 
 
 class Logger:
-    
+
     output_path = './logs/'
     file = None
 
     def __init__(self):
         if not os.path.exists(self.output_path):
             os.mkdir(self.output_path)
-            
-        d = datetime.datetime.now() 
+
+        d = datetime.datetime.now()
         filename = self.output_path + d.strftime('%Y%m%d_%H%M%S.txt')
         self.file = open(filename, 'w')
 
@@ -58,7 +59,7 @@ class Logger:
 
     def close(self):
         self.file.close()
-    
+
 
 class Capturer(cv2.VideoCapture):
 
@@ -91,7 +92,7 @@ class Capturer(cv2.VideoCapture):
         if self.write_enabled:
             self.writer.write(img)
         return img
-    
+
     def close(self):
         if self.write_enabled:
             self.writer.release()
@@ -109,7 +110,7 @@ class Detector:
     buffer_length = 5
     paused = False
     img_color_last = None
-    
+
     def __init__(self, config):
         self.resolution = (int(config['SCREEN']['width']), int(config['SCREEN']['height']))
         self.sensitivity = int(config['DETECTION']['sensitivity'])
@@ -142,7 +143,7 @@ class Detector:
             self.time_to_save = time.time() + 3
 
     def increase_sensitivity(self):
-        if self.sensitivity < 15:
+        if self.sensitivity < 20:
             self.sensitivity += 1
             self.time_to_save = time.time() + 3
 
@@ -163,7 +164,7 @@ class Detector:
         img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         img_gray = cv2.resize(img_gray, self.resolution)
         img_gray = cv2.blur(img_gray, (20, 20))
-        if not self.buffer.any(): 
+        if not self.buffer.any():
             self.buffer[:] = img_gray
         self.buffer[self.pointer, :, :] = img_gray
         self.img_color_last = cv2.resize(img, self.resolution)
@@ -209,10 +210,10 @@ class Detector:
 
         img_output_video = self.img_color_last.copy()
 
-        if result:
+        if result and self.show_plot:
             x_edges, y_edges = np.where(mask)
-            p0 = (np.min(y_edges)-5, np.min(x_edges)-5)
-            p1 = (np.max(y_edges)+5, np.max(x_edges)+5)
+            p0 = (np.min(y_edges)+1, np.min(x_edges)+1)
+            p1 = (np.max(y_edges)-1, np.max(x_edges)-1)
             cv2.rectangle(img_output_video, p0, p1, color=(0, 255, 0), thickness=2)
 
         height = len(self.laps_list) * self.line_height
@@ -319,13 +320,13 @@ def main():
         elif key == 32:  # space
             detector.toggle_pause()
             timer.reset()
-        elif key == 13:  # enter
-            detector.clear_laps()
-            timer.reset()
         elif key == 45:  # minus
             detector.decrease_sensitivity()
         elif key == 61:  # plus
             detector.increase_sensitivity()
+        elif key == ord('c'):
+            detector.clear_laps()
+            timer.reset()
         elif key == ord('p'):
             detector.toggle_plot()
 
