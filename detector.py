@@ -100,9 +100,15 @@ class Capturer(cv2.VideoCapture):
         cv2.destroyAllWindows()
 
 
-def beep():
-    playsound.playsound('beep.wav', block=False)
-    return
+class Beeper:
+
+    def __init__(self, config):
+        self.enabled = int(config['DETECTION']['sound_on'])
+
+    def beep(self):
+        if self.enabled:
+            playsound.playsound('beep.wav', block=False)
+            return
 
 
 class Detector:
@@ -293,10 +299,11 @@ def main():
     detector = Detector(config)
     logger = Logger()
     debug = Debug(config)
+    beeper = Beeper(config)
 
     cv2.namedWindow('Whoop Detector', cv2.WINDOW_NORMAL)
     detector.resize_window()
-    beep()
+    beeper.beep()
 
     while True:
 
@@ -308,7 +315,7 @@ def main():
         if detection_result:
             timer_result, lap_time = timer.put_event()
             if timer_result:
-                beep()
+                beeper.beep()
                 if lap_time:
                     logger.put('{0:.2f}'.format(lap_time))
                     detector.put_lap(lap_time)
