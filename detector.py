@@ -126,16 +126,19 @@ class Detector:
         self.laps_list = []
         self.max_displayed_lap_count = self.resolution[1]//self.line_height
 
+    def resize_window(self):
+        if self.show_plot:
+            cv2.resizeWindow('Whoop Detector', self.resolution[0], self.resolution[1] + self.resolution[1]//3)
+        else:
+            cv2.resizeWindow('Whoop Detector', self.resolution[0], self.resolution[1])
+
     def toggle_pause(self):
         self.paused = not self.paused
 
     def toggle_plot(self):
         self.show_plot = int(not self.show_plot)
         self.time_to_save = time.time() + 3
-        if self.show_plot:
-            cv2.resizeWindow('Whoop Detector', self.resolution[0], self.resolution[1] + self.resolution[1]//3)
-        else:
-            cv2.resizeWindow('Whoop Detector', self.resolution[0], self.resolution[1])
+        self.resize_window()
 
     def decrease_sensitivity(self):
         if self.sensitivity > 1:
@@ -292,6 +295,7 @@ def main():
     debug = Debug(config)
 
     cv2.namedWindow('Whoop Detector', cv2.WINDOW_NORMAL)
+    detector.resize_window()
     beep()
 
     while True:
