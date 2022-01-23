@@ -63,9 +63,10 @@ class Logger:
 
 class Capturer(cv2.VideoCapture):
 
-    write_enabled = False
+    output_path = './video/'
 
-    def __init__(self, config, write_to_file=False):
+    def __init__(self, config):
+        self.write_enabled = int(config['DEBUG']['save_video'])
         cv2.VideoCapture.__init__(self, int(config['DETECTION']['camera_id']))
         self.set(cv2.CAP_PROP_FPS, 25)
         self.read()
@@ -76,15 +77,16 @@ class Capturer(cv2.VideoCapture):
             input()
             sys.exit(-1)
         self.resolution = img.shape[:2]
-        if write_to_file:
-            fourcc = cv2.VideoWriter_fourcc('H', '2', '6', '4')
+        if self.write_enabled:
+            if not os.path.exists(self.output_path):
+                os.mkdir(self.output_path)
             res = (img.shape[1], img.shape[0])
             for num in range(10000):
-                filename = 'video/{0:04d}.mp4'.format(num)
+                filename = self.output_path + 'video_{0:04d}.mp4'.format(num)
                 if not os.path.exists(filename):
-                    print('Writing to file <{0}>\n'.format(filename))
+                    print('Writing to file: {0}\n'.format(filename))
+                    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
                     self.writer = cv2.VideoWriter(filename, fourcc, 25, res)
-                    self.write_enabled = True
                     break
 
     def get_frame(self):
@@ -267,7 +269,7 @@ class Debug:
         self.tic_time = 0
         self.toc_time = 0
         self.counter = 0
-        self.enabled = int(config['DEBUG']['debug'])
+        self.enabled = int(config['DEBUG']['print_debug'])
 
     def tic(self):
         self.tic_time = time.time()
