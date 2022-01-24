@@ -115,15 +115,14 @@ class Beeper:
 
 class Detector:
 
-    buffer_length = 5
-    paused = False
-    img_color_last = None
-
     def __init__(self, config):
+        self.paused = False
         self.resolution = (int(config['SCREEN']['width']), int(config['SCREEN']['height']))
         self.sensitivity = int(config['DETECTION']['sensitivity'])
         self.show_plot = int(config['DEBUG']['show_plot'])
         self.pointer = 0
+        self.buffer_length = 5
+        self.img_color_last = None
         self.buffer = np.zeros((self.buffer_length, self.resolution[1],
                                 self.resolution[0]), dtype='uint8')
         self.history = np.zeros((self.resolution[0],))
@@ -184,6 +183,9 @@ class Detector:
     def clear_laps(self):
         self.laps_list = []
 
+    def apply_log_scale(self, values):
+        return np.log(values * np.exp((self.sensitivity - 5)/3) * (np.e - 1) + 1)
+
     def put_history(self, value):
         self.frame_counter += 1
         if self.frame_counter % 2 == 0:  # slow down the plot twice, keeping peak values
@@ -192,16 +194,42 @@ class Detector:
             self.history[-1] = new_history_value
         self.prev_history_value = value
 
-    def estimate_movement(self):
+    def draw_history_plot(self):
+        image = np.zeros((self.resolution[1] // 3, self.resolution[0], 3), dtype='uint8')
+        y = image.shape[0] // 2
+        cv2.line(image, (0, y), (image.shape[1], y), (127, 127, 127), 1)
+        y = (1 - self.apply_log_scale(self.history)) * self.resolution[1] // 3
+        y[y < 3] = 3
+        y[y > self.resolution[1] // 3 - 4] = self.resolution[1] // 3 - 4
+        for i in range(len(self.history) - 1):
+            cv2.line(image, (i, int(y[i])), (i + 1, int(y[i + 1])), (255, 255, 255), 1, cv2.LINE_AA)
+        return image
 
-        def apply_log_scale(values, sensitivity):
-            return np.log(values * np.exp((sensitivity - 5)/3) * (np.e - 1) + 1)
+    def estimate_movement(self):
 
         def print_text(image, text, pos, size):
             font = cv2.FONT_HERSHEY_SIMPLEX
             (w, h), baseline = cv2.getTextSize(text, font, size, 2)
             pos = (pos[0] - w//2, pos[1] + h//2)
             cv2.putText(image, text, pos, font, size, [255, 255, 255], 2, cv2.LINE_AA)
+
+        def draw_laps(image, laps, line_height):
+            height = len(laps) * line_height
+            image[10:height + 10, 10:110, :] //= 2
+            for i, lap in enumerate(laps):
+                y = i * self.line_height + line_height // 2 + 10
+                print_text(image, lap, (60, y), 0.7)
+
+        def draw_pause(image, resolution):
+            (x, y) = (resolution[0] // 2, resolution[1] // 2)
+            image[y - 22:y + 22, x - 70:x + 70, :] //= 2
+            print_text(image, 'Pause', (x, y), 1)
+
+        def draw_mask(image, mask):
+            x_edges, y_edges = np.where(mask)
+            p0 = (np.min(y_edges)+1, np.min(x_edges)+1)
+            p1 = (np.max(y_edges)-1, np.max(x_edges)-1)
+            cv2.rectangle(image, p0, p1, color=(0, 255, 0), thickness=2)
 
         threshold_difference_level = 7  # pixel brightness 0..255
 
@@ -212,45 +240,22 @@ class Detector:
         n_detected_points = np.count_nonzero(mask)
         detected_points_part = n_detected_points / np.prod(self.resolution)
         self.put_history(detected_points_part)
-
-        result = apply_log_scale(detected_points_part, self.sensitivity) > 0.5
+        result = self.apply_log_scale(detected_points_part) > 0.5
 
         img_output_video = self.img_color_last.copy()
 
         if result and self.show_plot:
-            x_edges, y_edges = np.where(mask)
-            p0 = (np.min(y_edges)+1, np.min(x_edges)+1)
-            p1 = (np.max(y_edges)-1, np.max(x_edges)-1)
-            cv2.rectangle(img_output_video, p0, p1, color=(0, 255, 0), thickness=2)
+            draw_mask(img_output_video, mask)
 
-        height = len(self.laps_list) * self.line_height
-        img_output_video[10:height+10, 10:110, :] //= 2
-
-        for i, lap in enumerate(self.laps_list):
-            y = i * self.line_height + self.line_height // 2 + 10
-            print_text(img_output_video, lap, (60, y), 0.7)
+        draw_laps(img_output_video, self.laps_list, self.line_height)
 
         if self.paused:
             result = False
-            (x, y) = (self.resolution[0]//2, self.resolution[1]//2)
-            img_output_video[y-22:y+22, x-70:x+70, :] //= 2
-            print_text(img_output_video, 'Pause', (x, y), 1)
+            draw_pause(img_output_video, self.resolution)
 
         if self.show_plot:
-
-            img_output_plot = np.zeros((self.resolution[1]//3, self.resolution[0], 3), dtype='uint8')
-
-            y = img_output_plot.shape[0] // 2
-            cv2.line(img_output_plot, (0, y), (img_output_plot.shape[1], y), (127, 127, 127), 1)
-
-            y = (1 - apply_log_scale(self.history, self.sensitivity)) * self.resolution[1]//3
-            y[y < 3] = 3
-            y[y > self.resolution[1]//3-4] = self.resolution[1]//3-4
-            for i in range(len(self.history)-1):
-                cv2.line(img_output_plot, (i, int(y[i])), (i+1, int(y[i+1])), (255, 255, 255), 1, cv2.LINE_AA)
-
+            img_output_plot = self.draw_history_plot()
             img_output = np.vstack((img_output_video, img_output_plot))
-
         else:
             img_output = img_output_video
 
