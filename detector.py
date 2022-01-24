@@ -126,19 +126,13 @@ class Detector:
         self.pointer = 0
         self.buffer = np.zeros((self.buffer_length, self.resolution[1],
                                 self.resolution[0]), dtype='uint8')
-        self.history = np.zeros((self.resolution[0], 1))
+        self.history = np.zeros((self.resolution[0],))
+        self.prev_history_value = 0
         self.time_to_save = 0
         self.frame_counter = 0
-        self.prev_detected_points_part = 0
         self.line_height = 35
         self.laps_list = []
         self.max_displayed_lap_count = self.resolution[1]//self.line_height
-
-    def resize_window(self):
-        if self.show_plot:
-            cv2.resizeWindow('Whoop Detector', self.resolution[0], self.resolution[1] + self.resolution[1]//3)
-        else:
-            cv2.resizeWindow('Whoop Detector', self.resolution[0], self.resolution[1])
 
     def toggle_pause(self):
         self.paused = not self.paused
@@ -146,17 +140,18 @@ class Detector:
     def toggle_plot(self):
         self.show_plot = int(not self.show_plot)
         self.time_to_save = time.time() + 3
-        self.resize_window()
 
     def decrease_sensitivity(self):
         if self.sensitivity > 1:
             self.sensitivity -= 1
             self.time_to_save = time.time() + 3
+        print('Sensitivity: {0}'.format(self.sensitivity))
 
     def increase_sensitivity(self):
         if self.sensitivity < 20:
             self.sensitivity += 1
             self.time_to_save = time.time() + 3
+        print('Sensitivity: {0}'.format(self.sensitivity))
 
     def check_config_status(self, config):
         if self.time_to_save:
@@ -189,6 +184,14 @@ class Detector:
     def clear_laps(self):
         self.laps_list = []
 
+    def put_history(self, value):
+        self.frame_counter += 1
+        if self.frame_counter % 2 == 0:  # slow down the plot twice, keeping peak values
+            new_history_value = np.max([self.prev_history_value, value])
+            self.history[:-1] = self.history[1:]
+            self.history[-1] = new_history_value
+        self.prev_history_value = value
+
     def estimate_movement(self):
 
         def apply_log_scale(values, sensitivity):
@@ -208,14 +211,7 @@ class Detector:
         mask = img_diff >= threshold_difference_level
         n_detected_points = np.count_nonzero(mask)
         detected_points_part = n_detected_points / np.prod(self.resolution)
-
-        self.frame_counter += 1
-
-        if self.frame_counter % 2 == 0:  # slow down the plot twice, keeping peak values
-            new_history_value = np.max([self.prev_detected_points_part, detected_points_part])
-            self.history[:-1] = self.history[1:]
-            self.history[-1] = new_history_value
-        self.prev_detected_points_part = detected_points_part
+        self.put_history(detected_points_part)
 
         result = apply_log_scale(detected_points_part, self.sensitivity) > 0.5
 
@@ -309,8 +305,7 @@ def main():
     debug = Debug(config)
     beeper = Beeper(config)
 
-    cv2.namedWindow('Whoop Detector', cv2.WINDOW_NORMAL)
-    detector.resize_window()
+    cv2.namedWindow('Whoop Detector', cv2.WINDOW_AUTOSIZE)
     beeper.beep()
 
     while True:
