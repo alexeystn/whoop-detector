@@ -189,7 +189,7 @@ class Detector:
     def clear_laps(self):
         self.laps_list = []
 
-    def estimate_movement(self, debug):
+    def estimate_movement(self):
 
         def apply_log_scale(values, sensitivity):
             return np.log(values * np.exp((sensitivity - 5)/3) * (np.e - 1) + 1)
@@ -264,32 +264,38 @@ class Detector:
 class Debug:
 
     def __init__(self, config):
-        self.previous_cycle_time = time.time()
-        self.load = 0
-        self.tic_time = 0
-        self.toc_time = 0
-        self.counter = 0
+        self.previous_cycle_ts = time.perf_counter()
+        self.tic_ts = 0
+        self.toc_ts = 0
+        self.pointer = 0
+        self.processing_time_buffer = np.zeros((10,))
+        self.cycle_time_buffer = self.processing_time_buffer.copy()
         self.enabled = int(config['DEBUG']['print_debug'])
 
     def tic(self):
-        self.tic_time = time.time()
+        self.tic_ts = time.perf_counter()
 
     def toc(self):
-        self.toc_time = time.time()
+        self.toc_ts = time.perf_counter()
 
     def cycle(self):
         if not self.enabled:
             return
-        current_cycle_time = time.time()
-        cycle_duration = current_cycle_time - self.previous_cycle_time
-        function_duration = self.toc_time - self.tic_time
-        self.previous_cycle_time = current_cycle_time
-        load = function_duration / cycle_duration
-        self.counter += 1
-        if self.counter == 10:
-            self.counter = 0
+        current_cycle_ts = time.perf_counter()
+        processing_time = self.toc_ts - self.tic_ts
+        cycle_time = current_cycle_ts - self.previous_cycle_ts
+        self.previous_cycle_ts = current_cycle_ts
+        self.cycle_time_buffer[self.pointer] = cycle_time
+        self.processing_time_buffer[self.pointer] = processing_time
+        self.pointer += 1
+        if self.pointer == len(self.cycle_time_buffer):
+            self.pointer = 0
+            avg_processing_time = np.mean(self.processing_time_buffer)
+            avg_cycle_time = np.mean(self.cycle_time_buffer)
             print('DEBUG:  {0:4.0f} us  {1:5.2f}% load  {2:.1f} FPS'.format(
-                function_duration*1e6, load*100,  1/cycle_duration))
+                avg_processing_time * 1e6,
+                avg_processing_time / avg_cycle_time * 100,
+                1 / avg_cycle_time))
 
 
 def main():
@@ -312,7 +318,7 @@ def main():
         img = capturer.get_frame()
         debug.tic()
         detector.put_image(img)
-        detection_result, img_output = detector.estimate_movement(debug)
+        detection_result, img_output = detector.estimate_movement()
 
         if detection_result:
             timer_result, lap_time = timer.put_event()
