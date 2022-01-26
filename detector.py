@@ -12,23 +12,26 @@ import playsound
 class Timer:
 
     def __init__(self, config):
-        self.min_time = int(config['RACE']['min_lap_time'])
-        self.max_time = int(config['RACE']['max_lap_time'])
-
+        self.min_lap_time = int(config['RACE']['min_lap_time'])
+        self.max_lap_time = int(config['RACE']['max_lap_time'])
         self.started = False
+        self.start_time = time.time()
         self.previous_timestamp = time.time()
 
     def put_event(self):
         current_timestamp = time.time()
+        if current_timestamp - self.start_time < 1:
+            return False, 0  # protect from detector initialization
+
         lap_time = current_timestamp - self.previous_timestamp
-        if lap_time < self.min_time:
+        if lap_time < self.min_lap_time:
             return False, 0
 
         if not self.started:
             lap_time = None
             self.started = True
         else:
-            if lap_time > self.max_time:
+            if lap_time > self.max_lap_time:
                 lap_time = None
 
         self.previous_timestamp = current_timestamp
@@ -41,7 +44,6 @@ class Timer:
 class Logger:
 
     output_path = './logs/'
-    file = None
 
     def __init__(self):
         if not os.path.exists(self.output_path):
@@ -122,10 +124,10 @@ class Display:
         self.width = int(config['SCREEN']['width'])
         self.history = np.zeros((self.width,))
         self.prev_history_value = 0
-        self.frame_counter = 0
-        self.line_height = 35
+        self.history_counter = 0
+        self.line_height = 34
         self.laps_list = []
-        self.max_displayed_lap_count = int(config['SCREEN']['height'])//self.line_height
+        self.max_lap_count = int(config['SCREEN']['height'])//self.line_height
         self.show_plot = int(config['DEBUG']['show_plot'])
         cv2.namedWindow(self.window_name, cv2.WINDOW_AUTOSIZE)
 
@@ -133,8 +135,8 @@ class Display:
         self.show_plot = int(not self.show_plot)
 
     def put_history(self, value):
-        self.frame_counter += 1
-        if self.frame_counter % 2 == 0:  # slow down the plot twice, keeping peak values
+        self.history_counter += 1
+        if self.history_counter % 2 == 0:  # slow down the plot twice, keeping peak values
             new_history_value = np.max([self.prev_history_value, value])
             self.history[:-1] = self.history[1:]
             self.history[-1] = new_history_value
@@ -153,14 +155,14 @@ class Display:
 
     def put_lap(self, lap_time):
         self.laps_list.append('{0:.2f}'.format(lap_time))
-        if len(self.laps_list) > self.max_displayed_lap_count:
+        if len(self.laps_list) > self.max_lap_count:
             self.laps_list.pop(0)
             self.laps_list[0] = '^'
 
     def clear_laps(self):
         self.laps_list = []
 
-    def show(self, parameters):
+    def show(self, args):
 
         def print_text(image, text, pos, size):
             font = cv2.FONT_HERSHEY_SIMPLEX
@@ -181,26 +183,37 @@ class Display:
             print_text(image, 'Pause', (x, y), 1)
 
         def draw_mask(image, mask):
-            x_edges, y_edges = np.where(mask)
-            p0 = (np.min(y_edges) + 1, np.min(x_edges) + 1)
-            p1 = (np.max(y_edges) - 1, np.max(x_edges) - 1)
-            cv2.rectangle(image, p0, p1, color=(0, 255, 0), thickness=2)
-
-        if parameters['result'] and self.show_plot:
-            draw_mask(parameters['image'], parameters['mask'])
-
-        draw_laps(parameters['image'], self.laps_list, self.line_height)
-
-        self.put_history(parameters['estimation'])
-
-        if parameters['paused']:
-            draw_pause(parameters['image'])
+            show_points = False
+            show_rectangle = True
+            if not np.any(mask):
+                return
+            mask = cv2.resize(mask, (image.shape[1], image.shape[0]))
+            if show_points:
+                green_image = np.zeros(image.shape, image.dtype)
+                green_image[:, :] = (0, 255, 0)
+                green_mask = cv2.bitwise_and(green_image, green_image, mask=mask)
+                cv2.addWeighted(green_mask, 1, image, 1, 0, image)
+            if show_rectangle:
+                x_points, y_points = np.where(mask)
+                p0 = (np.min(y_points), np.min(x_points))
+                p1 = (np.max(y_points), np.max(x_points))
+                cv2.rectangle(image, p0, p1, color=(0, 255, 0), thickness=2)
 
         if self.show_plot:
-            img_output_plot = self.draw_history_plot(parameters['sensitivity'])
-            img_output = np.vstack((parameters['image'], img_output_plot))
+            draw_mask(args['image'], args['mask'])
+
+        draw_laps(args['image'], self.laps_list, self.line_height)
+
+        self.put_history(args['estimation'])
+
+        if args['paused']:
+            draw_pause(args['image'])
+
+        if self.show_plot:
+            img_output_plot = self.draw_history_plot(args['sensitivity'])
+            img_output = np.vstack((args['image'], img_output_plot))
         else:
-            img_output = parameters['image']
+            img_output = args['image']
 
         cv2.imshow(self.window_name, img_output)
 
@@ -209,14 +222,10 @@ class Detector:
 
     def __init__(self, config):
         self.paused = False
-        self.resolution = (int(config['SCREEN']['width']), int(config['SCREEN']['height']))
+        self.output_resolution = (int(config['SCREEN']['width']), int(config['SCREEN']['height']))
+        self.detection_resolution = (320, 240)
         self.sensitivity = int(config['DETECTION']['sensitivity'])
-
-        self.pointer = 0
-        self.buffer_length = 5
-        self.img_color_last = None
-        self.buffer = np.zeros((self.buffer_length, self.resolution[1],
-                                self.resolution[0]), dtype='uint8')
+        self.background_subtractor = cv2.createBackgroundSubtractorMOG2(history=10)
 
     def toggle_pause(self):
         self.paused = not self.paused
@@ -231,37 +240,22 @@ class Detector:
             self.sensitivity += 1
         print('Sensitivity: {0}'.format(self.sensitivity))
 
-    def put_image(self, img):
-        self.pointer += 1
-        if self.pointer == self.buffer_length:
-            self.pointer = 0
-        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        img_gray = cv2.resize(img_gray, self.resolution)
-        img_gray = cv2.blur(img_gray, (20, 20))
-        if not self.buffer.any():
-            self.buffer[:] = img_gray
-        self.buffer[self.pointer, :, :] = img_gray
-        self.img_color_last = cv2.resize(img, self.resolution)
-
-    def estimate_movement(self):
-
-        threshold_difference_level = 7  # pixel brightness 0..255
-
-        img_smoothed = np.mean(self.buffer, axis=0).astype('uint8')
-        img_diff = self.buffer[self.pointer, :, :].astype('float') - img_smoothed.astype('float')
-        img_diff = np.abs(img_diff)
-        mask = img_diff >= threshold_difference_level
-        n_detected_points = np.count_nonzero(mask)
-        detected_points_part = n_detected_points / np.prod(self.resolution)
-        result = apply_log_scale(detected_points_part, self.sensitivity) > 0.5
-        img_output_video = self.img_color_last.copy()
+    def estimate_movement(self, image):
+        image = cv2.resize(image, self.output_resolution)
+        image_small = cv2.resize(image, self.detection_resolution)
+        image_small = cv2.blur(image_small, (5, 5))
+        foreground_mask = self.background_subtractor.apply(image_small)
+        movement_mask = foreground_mask
+        num_detected_points = np.count_nonzero(movement_mask)
+        movement_ratio = num_detected_points / np.prod(self.detection_resolution)
+        result = apply_log_scale(movement_ratio, self.sensitivity) > 0.5
 
         if self.paused:
             result = False
 
-        return {'image': img_output_video,
-                'estimation': detected_points_part,
-                'mask': mask,
+        return {'image': image,
+                'estimation': movement_ratio,
+                'mask': movement_mask,
                 'sensitivity': self.sensitivity,
                 'paused': self.paused,
                 'result': result}
@@ -327,13 +321,13 @@ def apply_log_scale(values, scale):
 def main():
 
     config = Config()
-    timer = Timer(config)
     capturer = Capturer(config)
     detector = Detector(config)
     display = Display(config)
-    logger = Logger()
     debug = Debug(config)
+    timer = Timer(config)
     beeper = Beeper(config)
+    logger = Logger()
 
     beeper.beep()
 
@@ -341,8 +335,8 @@ def main():
 
         img = capturer.get_frame()
         debug.tic()
-        detector.put_image(img)
-        args = detector.estimate_movement()
+
+        args = detector.estimate_movement(img)
 
         if args['result']:
             timer_result, lap_time = timer.put_event()
