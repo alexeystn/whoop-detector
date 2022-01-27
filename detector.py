@@ -16,28 +16,41 @@ class Timer:
         self.max_lap_time = int(config['RACE']['max_lap_time'])
         self.started = False
         self.start_time = time.time()
-        self.previous_timestamp = time.time()
+        self.previous_timestamp = 0
+        self.best_lap = 0
+        self.lap_counter = 0
 
     def put_event(self):
+
+        result = {'event': False, 'lap_time': 0, 'best': False}
+
         current_timestamp = time.time()
         if current_timestamp - self.start_time < 1:
-            return False, 0  # protect from detector initialization
+            return result  # protect from detector initialization
 
         lap_time = current_timestamp - self.previous_timestamp
-        if lap_time < self.min_lap_time:
-            return False, 0
 
-        if not self.started:
-            lap_time = None
-            self.started = True
-        else:
-            if lap_time > self.max_lap_time:
-                lap_time = None
+        if lap_time > self.min_lap_time:
+            result['event'] = True
+            if not self.started:
+                self.started = True
+            else:
+                if lap_time > self.max_lap_time:
+                    result['lap_time'] = 0
+                else:
+                    result['lap_time'] = lap_time
+                    self.lap_counter += 1
+                    if self.lap_counter > 1:
+                        if (self.best_lap == 0) or (lap_time < self.best_lap):
+                            self.best_lap = lap_time
+                            result['best'] = True
+            self.previous_timestamp = current_timestamp
 
-        self.previous_timestamp = current_timestamp
-        return True, lap_time
+        return result
 
     def reset(self):
+        self.best_lap = 0
+        self.lap_counter = 0
         self.started = False
 
 
@@ -153,29 +166,33 @@ class Display:
             cv2.line(image, (i, int(y[i])), (i + 1, int(y[i + 1])), (255, 255, 255), 1, cv2.LINE_AA)
         return image
 
-    def put_lap(self, lap_time):
-        self.laps_list.append('{0:.2f}'.format(lap_time))
+    def put_lap(self, arg):
+        self.laps_list.append(['{0:.2f}'.format(arg['lap_time']), arg['best']])
         if len(self.laps_list) > self.max_lap_count:
             self.laps_list.pop(0)
-            self.laps_list[0] = '^'
+            self.laps_list[0] = ['^', False]
 
     def clear_laps(self):
         self.laps_list = []
 
     def show(self, args):
 
-        def print_text(image, text, pos, size):
+        def print_text(image, text, pos, size, highlight=False):
             font = cv2.FONT_HERSHEY_SIMPLEX
             (w, h), baseline = cv2.getTextSize(text, font, size, 2)
             pos = (pos[0] - w // 2, pos[1] + h // 2)
-            cv2.putText(image, text, pos, font, size, [255, 255, 255], 2, cv2.LINE_AA)
+            if highlight:
+                color = [0, 255, 255]
+            else:
+                color = [255, 255, 255]
+            cv2.putText(image, text, pos, font, size, color, 2, cv2.LINE_AA)
 
         def draw_laps(image, laps, line_height):
             height = len(laps) * line_height
             image[10:height + 10, 10:110, :] //= 2
             for i, lap in enumerate(laps):
                 y = i * self.line_height + line_height // 2 + 10
-                print_text(image, lap, (60, y), 0.7)
+                print_text(image, lap[0], (60, y), 0.7, lap[1])
 
         def draw_pause(image):
             (x, y) = (self.width // 2, self.height // 2)
@@ -338,12 +355,12 @@ def main():
         args = detector.estimate_movement(img)
 
         if args['result']:
-            timer_result, lap_time = timer.put_event()
-            if timer_result:
+            timer_result = timer.put_event()
+            if timer_result['event']:
                 beeper.beep()
-                if lap_time:
-                    logger.put('{0:.2f}'.format(lap_time))
-                    display.put_lap(lap_time)
+                if timer_result['lap_time']:
+                    logger.put('{0:.2f}'.format(timer_result['lap_time']))
+                    display.put_lap(timer_result)
                 else:
                     logger.put('Start')
 
@@ -355,7 +372,6 @@ def main():
             break
         elif key == 32:  # space
             detector.toggle_pause()
-            timer.reset()
         elif key == 45:  # minus
             detector.decrease_sensitivity()
         elif key == 61:  # plus
