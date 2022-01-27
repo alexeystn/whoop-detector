@@ -243,10 +243,9 @@ class Detector:
     def estimate_movement(self, image):
         image = cv2.resize(image, self.output_resolution)
         image_small = cv2.resize(image, self.detection_resolution)
-        image_small = cv2.blur(image_small, (5, 5))
+        image_small = cv2.blur(image_small, (10, 10))
         foreground_mask = self.background_subtractor.apply(image_small)
-        movement_mask = foreground_mask
-        num_detected_points = np.count_nonzero(movement_mask)
+        num_detected_points = np.count_nonzero(foreground_mask)
         movement_ratio = num_detected_points / np.prod(self.detection_resolution)
         result = apply_log_scale(movement_ratio, self.sensitivity) > 0.5
 
@@ -255,7 +254,7 @@ class Detector:
 
         return {'image': image,
                 'estimation': movement_ratio,
-                'mask': movement_mask,
+                'mask': foreground_mask,
                 'sensitivity': self.sensitivity,
                 'paused': self.paused,
                 'result': result}
