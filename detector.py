@@ -26,7 +26,7 @@ class Timer:
 
         current_timestamp = time.time()
         if current_timestamp - self.start_time < 1:
-            return result  # protect from detector initialization
+            return result
 
         lap_time = current_timestamp - self.previous_timestamp
 
@@ -370,11 +370,11 @@ def main():
         key = cv2.waitKey(1)
         if key == 27:  # esc
             break
-        elif key == 32:  # space
+        elif key == ord(' '):
             detector.toggle_pause()
-        elif key == 45:  # minus
+        elif key == ord('-'):
             detector.decrease_sensitivity()
-        elif key == 61:  # plus
+        elif key == ord('='):
             detector.increase_sensitivity()
         elif key == ord('c'):
             display.clear_laps()
