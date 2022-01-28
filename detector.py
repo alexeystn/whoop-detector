@@ -40,9 +40,9 @@ class Timer:
                 else:
                     result['lap_time'] = lap_time
                     self.lap_counter += 1
-                    if self.lap_counter > 1:
-                        if (self.best_lap == 0) or (lap_time < self.best_lap):
-                            self.best_lap = lap_time
+                    if (self.best_lap == 0) or (lap_time < self.best_lap):
+                        self.best_lap = lap_time
+                        if self.lap_counter > 1:
                             result['best'] = True
             self.previous_timestamp = current_timestamp
 
