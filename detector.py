@@ -82,7 +82,7 @@ class Capturer(cv2.VideoCapture):
 
     def __init__(self, config):
         self.write_enabled = int(config['DEBUG']['save_video'])
-        cv2.VideoCapture.__init__(self, int(config['DETECTION']['camera_id']))
+        cv2.VideoCapture.__init__(self, int(config['CAMERA']['camera_id']))
         self.set(cv2.CAP_PROP_FPS, 25)
         self.read()
         time.sleep(0.5)
@@ -120,7 +120,7 @@ class Capturer(cv2.VideoCapture):
 class Beeper:
 
     def __init__(self, config):
-        self.enabled = int(config['DETECTION']['sound_on'])
+        self.enabled = int(config['SOUND']['sound_on'])
 
     def beep(self):
         if self.enabled:
@@ -242,6 +242,7 @@ class Detector:
         self.output_resolution = (int(config['SCREEN']['width']), int(config['SCREEN']['height']))
         self.detection_resolution = (320, 240)
         self.sensitivity = int(config['DETECTION']['sensitivity'])
+        self.smoothness = int(config['DETECTION']['smoothness'])
         self.background_subtractor = cv2.createBackgroundSubtractorMOG2(history=10)
 
     def toggle_pause(self):
@@ -260,7 +261,7 @@ class Detector:
     def estimate_movement(self, image):
         image = cv2.resize(image, self.output_resolution)
         image_small = cv2.resize(image, self.detection_resolution)
-        image_small = cv2.blur(image_small, (10, 10))
+        image_small = cv2.blur(image_small, (self.smoothness, self.smoothness))
         foreground_mask = self.background_subtractor.apply(image_small)
         num_detected_points = np.count_nonzero(foreground_mask)
         movement_ratio = num_detected_points / np.prod(self.detection_resolution)
@@ -286,7 +287,7 @@ class Debug:
         self.pointer = 0
         self.processing_time_buffer = np.zeros((10,))
         self.cycle_time_buffer = self.processing_time_buffer.copy()
-        self.enabled = int(config['DEBUG']['print_debug'])
+        self.enabled = int(config['DEBUG']['print_load'])
 
     def tic(self):
         self.tic_ts = time.perf_counter()
@@ -323,6 +324,7 @@ class Config(configparser.ConfigParser):
         self.read(self.filename)
 
     def save(self, display, detector):
+        # update only adjustable settings
         self['DETECTION']['sensitivity'] = str(detector.sensitivity)
         self['DEBUG']['show_plot'] = str(display.show_plot)
         with open(self.filename, 'w') as configfile:
