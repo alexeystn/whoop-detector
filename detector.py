@@ -79,11 +79,13 @@ class Logger:
 class Capturer(cv2.VideoCapture):
 
     output_path = './video/'
+    demo_path = './demo/demo.mp4'
 
     def __init__(self, config):
         self.write_enabled = int(config['DEBUG']['save_video'])
-        cv2.VideoCapture.__init__(self, int(config['CAMERA']['camera_id']))
-        self.set(cv2.CAP_PROP_FPS, 25)
+        # cv2.VideoCapture.__init__(self, int(config['CAMERA']['camera_id']))
+        cv2.VideoCapture.__init__(self, self.demo_path)
+        # self.set(cv2.CAP_PROP_FPS, 30) ???
         self.read()
         time.sleep(0.5)
         ret, img = self.read()
@@ -101,7 +103,7 @@ class Capturer(cv2.VideoCapture):
                 if not os.path.exists(filename):
                     print('Writing to file: {0}\n'.format(filename))
                     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                    self.writer = cv2.VideoWriter(filename, fourcc, 25, res)
+                    self.writer = cv2.VideoWriter(filename, fourcc, 30, res)
                     break
 
     def get_frame(self):
@@ -214,10 +216,11 @@ class Display:
                 x_points, y_points = np.where(mask)
                 p0 = (np.min(y_points), np.min(x_points))
                 p1 = (np.max(y_points), np.max(x_points))
-                cv2.rectangle(image, p0, p1, color=(0, 255, 0), thickness=2)
+                cv2.rectangle(image, p0, p1, color=(0, 200, 0), thickness=2)
 
         if self.show_plot:
             draw_mask(args['image'], args['mask'])
+
 
         draw_laps(args['image'], self.laps_list, self.line_height)
 
@@ -226,11 +229,7 @@ class Display:
         if args['paused']:
             draw_pause(args['image'])
 
-        if self.show_plot:
-            img_output_plot = self.draw_history_plot(args['sensitivity'])
-            img_output = np.vstack((args['image'], img_output_plot))
-        else:
-            img_output = args['image']
+        img_output = args['image']
 
         cv2.imshow(self.window_name, img_output)
 
@@ -243,7 +242,7 @@ class Detector:
         self.detection_resolution = (320, 240)
         self.sensitivity = int(config['DETECTION']['sensitivity'])
         self.smoothness = int(config['DETECTION']['smoothness'])
-        self.background_subtractor = cv2.createBackgroundSubtractorMOG2(history=10)
+        self.background_subtractor = cv2.createBackgroundSubtractorMOG2(history=20, varThreshold=10)
 
     def toggle_pause(self):
         self.paused = not self.paused
@@ -261,6 +260,7 @@ class Detector:
     def estimate_movement(self, image):
         image = cv2.resize(image, self.output_resolution)
         image_small = cv2.resize(image, self.detection_resolution)
+        image_small = cv2.addWeighted(image_small, 1.9, image_small, 0, 0)
         image_small = cv2.blur(image_small, (self.smoothness, self.smoothness))
         foreground_mask = self.background_subtractor.apply(image_small)
         num_detected_points = np.count_nonzero(foreground_mask)
@@ -342,49 +342,34 @@ def main():
     capturer = Capturer(config)
     detector = Detector(config)
     display = Display(config)
-    debug = Debug(config)
-    timer = Timer(config)
     beeper = Beeper(config)
     logger = Logger()
 
     beeper.beep()
 
+    cnt = 0
+    display.show_plot = 1
+
+    lap_frames = [7*25, 9*25, 11*25, 13*25, 15*25]
+    lap_times = [21.52, 22.19, 19.37, 20.64, 18.80]
+    lap_best = [False, False, True, False, True]
+
+    laps = {f: {'lap_time': l, 'best': b} for f, l, b in zip(lap_frames, lap_times, lap_best)}
+
     while True:
-
         img = capturer.get_frame()
-        debug.tic()
-
-        args = detector.estimate_movement(img)
-
-        if args['result']:
-            timer_result = timer.put_event()
-            if timer_result['event']:
-                beeper.beep()
-                if timer_result['lap_time']:
-                    logger.put('{0:.2f}'.format(timer_result['lap_time']))
-                    display.put_lap(timer_result)
-                else:
-                    logger.put('Start')
-
-        display.show(args)
-        debug.toc()
-
-        key = cv2.waitKey(1)
-        if key == 27:  # esc
+        if img is None:
             break
-        elif key == ord(' '):
-            detector.toggle_pause()
-        elif key == ord('-'):
-            detector.decrease_sensitivity()
-        elif key == ord('='):
-            detector.increase_sensitivity()
-        elif key == ord('c'):
-            display.clear_laps()
-            timer.reset()
-        elif key == ord('p'):
-            display.toggle_plot()
-
-        debug.cycle()
+        args = detector.estimate_movement(img)
+        display.show(args)
+        cv2.waitKey(50)
+        cnt += 1
+        if cnt > 6*25:
+            display.show_plot = 0
+        if cnt in laps.keys():
+            display.put_lap(laps[cnt])
+        if cnt == 1:
+            cv2.waitKey()
 
     capturer.close()
     logger.close()
