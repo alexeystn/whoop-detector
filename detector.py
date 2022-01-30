@@ -216,11 +216,11 @@ class Display:
                 x_points, y_points = np.where(mask)
                 p0 = (np.min(y_points), np.min(x_points))
                 p1 = (np.max(y_points), np.max(x_points))
-                cv2.rectangle(image, p0, p1, color=(0, 200, 0), thickness=2)
+                cv2.rectangle(image, p0, p1, color=(0, 255, 0), thickness=2)
 
+        args['image'] = cv2.addWeighted(args['image'], 0.9, args['image'], 0, 0)
         if self.show_plot:
             draw_mask(args['image'], args['mask'])
-
 
         draw_laps(args['image'], self.laps_list, self.line_height)
 
@@ -354,7 +354,28 @@ def main():
     lap_times = [21.52, 22.19, 19.37, 20.64, 18.80]
     lap_best = [False, False, True, False, True]
 
-    laps = {f: {'lap_time': l, 'best': b} for f, l, b in zip(lap_frames, lap_times, lap_best)}
+    # laps = {f: {'lap_time': l, 'best': b} for f, l, b in zip(lap_frames, lap_times, lap_best)}
+    laps = [{'lap_time': l, 'best': b} for l, b in zip(lap_times, lap_best)]
+
+    while True:
+        display.put_lap(laps[3])
+        display.put_lap(laps[0])
+        display.put_lap(laps[4])
+        img = cv2.imread('./Demo/screenHD.png')
+        img = cv2.resize(img, (320, 240))
+        img_blur = cv2.blur(img, (10, 10))
+        mask = (img_blur[:, :, 1] < 150).astype('uint8')
+        img[:, :, 0] += 10
+        img = cv2.addWeighted(img, 1, img, 0, 0)
+        args = {'image': img,
+                'estimation': 0,
+                'mask': mask,
+                'sensitivity': 1,
+                'paused': 0,
+                'result': 0}
+        display.show(args)
+        cv2.waitKey()
+        sys.exit(0)
 
     while True:
         img = capturer.get_frame()
@@ -362,7 +383,7 @@ def main():
             break
         args = detector.estimate_movement(img)
         display.show(args)
-        cv2.waitKey(50)
+        cv2.waitKey(30)
         cnt += 1
         if cnt > 6*25:
             display.show_plot = 0
@@ -370,6 +391,8 @@ def main():
             display.put_lap(laps[cnt])
         if cnt == 1:
             cv2.waitKey()
+            time.sleep(2)
+            cv2.waitKey(500)
 
     capturer.close()
     logger.close()
