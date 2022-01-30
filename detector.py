@@ -353,20 +353,22 @@ def main():
     lap_frames = [7*25, 9*25, 11*25, 13*25, 15*25]
     lap_times = [21.52, 22.19, 19.37, 20.64, 18.80]
     lap_best = [False, False, True, False, True]
-
     # laps = {f: {'lap_time': l, 'best': b} for f, l, b in zip(lap_frames, lap_times, lap_best)}
+
+    lap_times = [24.73, 25.02, 23.98]
+    lap_best = [False, False, True]
+
     laps = [{'lap_time': l, 'best': b} for l, b in zip(lap_times, lap_best)]
 
     while True:
-        display.put_lap(laps[3])
-        display.put_lap(laps[0])
-        display.put_lap(laps[4])
-        img = cv2.imread('./Demo/screenHD.png')
-        img = cv2.resize(img, (320, 240))
+        for lap in laps:
+            display.put_lap(lap)
+        img = cv2.imread('./Demo/screenHDw.png')
+        img = cv2.resize(img, (400, 240))
         img_blur = cv2.blur(img, (10, 10))
         mask = (img_blur[:, :, 1] < 150).astype('uint8')
         img[:, :, 0] += 10
-        img = cv2.addWeighted(img, 1, img, 0, 0)
+        img = cv2.addWeighted(img, 1, img, 0.1, 0)
         args = {'image': img,
                 'estimation': 0,
                 'mask': mask,
