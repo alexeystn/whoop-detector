@@ -1,9 +1,10 @@
 # Whoop Detector
-⏱ Webcam based timing system for indoor micro quads.
 
-🎥 Use integrated laptop front camera or external USB camera.
+* Webcam based timing system for indoor micro quads.
+* Use integrated laptop front camera or external USB camera.
+* Perfect for individual trainings.
 
-💪 Perfect for individual trainings.
+<img src="screenshot.png" width="400" />
 
 ### How it works
 1) Point your camera on the wall or on the floor.
