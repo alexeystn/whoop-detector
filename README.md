@@ -6,10 +6,12 @@
 
 <img src="screenshot.png" width="400" />
 
+[Video](https://youtu.be/SmLjgBpX1IA)
+
 ### How it works
 1) Point your camera on the wall or on the floor.
 2) Launch script `detector.py`.
-3) When your whoop appears in the camera field-of-view, a new lap is detected.
+3) When any moving object appears in the camera field-of-view, a new lap is detected.
 
 ### How to install
 1) Get the latest version of [Python](https://www.python.org/downloads/). <br>
