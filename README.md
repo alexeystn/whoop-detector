@@ -4,9 +4,10 @@
 * Use integrated laptop front camera or external USB camera.
 * Perfect for individual trainings.
 
+[Video](https://youtu.be/SmLjgBpX1IA)
+
 <img src="screenshot.png" width="400" />
 
-[Video](https://youtu.be/SmLjgBpX1IA)
 
 ### How it works
 1) Point your camera on the wall or on the floor.
@@ -21,11 +22,13 @@ Set "Add Python to PATH" checkbox while installing.
 `pip3 install playsound`
 
 ### Controls
-* Space — Pause <br>
-* Plus/Minus — Adjust sensitivity <br>
-* C — Clear results <br>
-* P — Show/hide plot <br>
-* Esc — Exit <br>
+| Key  | Function |
+|:----:|:--------:|
+| Space | Pause |
+| +/− | Adjust sensitivity |
+| C | Clear results |
+| P | Show/hide plot |
+| Esc | Exit |
 
 ### Tips
 * Use well illuminated environment.
