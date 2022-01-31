@@ -25,14 +25,15 @@ Set "Add Python to PATH" checkbox while installing.
 | Key  | Function |
 |:----:|:--------:|
 | Space | Pause |
-| +/− | Adjust sensitivity |
 | C | Clear results |
 | P | Show/hide plot |
+| M | Show/hide movement |
+| +/− | Adjust sensitivity |
 | Esc | Exit |
 
 ### Tips
 * Use well illuminated environment.
-* When you have more than one webcam in your system, you may need to change `camera_id` parameter from 0 to 1 in `config.ini`.
+* If you have more than one webcam in your system, you may need to change `camera_id` parameter from 0 to 1 in `config.ini`.
 * If the software crashes with sound module errors, try to install previous version of module: `pip3 install playsound==1.2.2`
 
 ---

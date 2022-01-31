@@ -142,10 +142,20 @@ class Display:
         self.laps_list = []
         self.max_lap_count = int(config['SCREEN']['height'])//self.line_height
         self.show_plot = int(config['DEBUG']['show_plot'])
+        self.show_mask = int(config['DEBUG']['show_mask'])
         cv2.namedWindow(self.window_name, cv2.WINDOW_AUTOSIZE)
 
     def toggle_plot(self):
+        msg = ['Plot: off', 'Plot: on']
         self.show_plot = int(not self.show_plot)
+        print(msg[self.show_plot])
+
+    def toggle_mask(self):
+        msg = ['Mask: off', 'Mask: points', 'Mask: rectangle']
+        self.show_mask += 1
+        if self.show_mask > 2:
+            self.show_mask = 0
+        print(msg[self.show_mask])
 
     def put_history(self, value):
         self.history_counter += 1
@@ -199,25 +209,23 @@ class Display:
             image[y - 22:y + 22, x - 70:x + 70, :] //= 2
             print_text(image, 'Pause', (x, y), 1)
 
-        def draw_mask(image, mask):
-            show_points = False
-            show_rectangle = True
+        def draw_mask(image, mask, mask_type):
             if not np.any(mask):
                 return
             mask = cv2.resize(mask, (image.shape[1], image.shape[0]))
-            if show_points:
+            if mask_type == 1:
                 green_image = np.zeros(image.shape, image.dtype)
                 green_image[:, :] = (0, 255, 0)
                 green_mask = cv2.bitwise_and(green_image, green_image, mask=mask)
                 cv2.addWeighted(green_mask, 1, image, 1, 0, image)
-            if show_rectangle:
+            if mask_type == 2:
                 x_points, y_points = np.where(mask)
                 p0 = (np.min(y_points), np.min(x_points))
                 p1 = (np.max(y_points), np.max(x_points))
                 cv2.rectangle(image, p0, p1, color=(0, 255, 0), thickness=2)
 
-        if self.show_plot:
-            draw_mask(args['image'], args['mask'])
+        if self.show_mask:
+            draw_mask(args['image'], args['mask'], self.show_mask)
 
         draw_laps(args['image'], self.laps_list, self.line_height)
 
@@ -327,6 +335,7 @@ class Config(configparser.ConfigParser):
         # update only adjustable settings
         self['DETECTION']['sensitivity'] = str(detector.sensitivity)
         self['DEBUG']['show_plot'] = str(display.show_plot)
+        self['DEBUG']['show_mask'] = str(display.show_mask)
         with open(self.filename, 'w') as configfile:
             self.write(configfile)
             print('Config saved')
@@ -383,6 +392,8 @@ def main():
             timer.reset()
         elif key == ord('p'):
             display.toggle_plot()
+        elif key == ord('m'):
+            display.toggle_mask()
 
         debug.cycle()
 
