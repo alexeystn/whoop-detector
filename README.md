@@ -17,7 +17,8 @@
 ### How to install
 1) Get the latest version of [Python](https://www.python.org/downloads/). <br>
 Set "Add Python to PATH" checkbox while installing.
-2) Install additional modules. Type in command line: <br>
+2) Install additional modules.  <br>
+Open "cmd.exe" (Windows) or "Terminal" (macOS) and enter: <br>
 `pip3 install opencv-python` <br>
 `pip3 install playsound`
 
